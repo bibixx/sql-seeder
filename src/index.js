@@ -1,10 +1,13 @@
+const squel = require('squel');
+const { Parser } = require('node-sql-parser');
+
 const exampleSql = require('./example-sql-psql');
 const constraints = require('./example-sql-psql-constraints');
 
 const opt = {
   database: 'PostgresQL'
 }
-const { Parser } = require('node-sql-parser');
+
 const parser = new Parser();
 
 const dataTypes = {
@@ -14,8 +17,11 @@ const dataTypes = {
   CHAR: 4,
 }
 
+let i = 0;
+
 const randomFunction = {
-  [dataTypes.INTEGER]: () => Math.floor(Math.random() * 100),
+  // [dataTypes.INTEGER]: () => Math.floor(Math.random() * 100),
+  [dataTypes.INTEGER]: () => i++,
   [dataTypes.DATE]: () => new Date(+(new Date()) - Math.floor(Math.random()*10000000000)).toISOString(),
   [dataTypes.VARCHAR]: () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
   [dataTypes.CHAR]: () => Math.random().toString(36).substring(2, 6),
@@ -29,6 +35,8 @@ const ast = parser.astify(
   cleanSql,
   opt
 );
+
+// console.dir(ast, {depth: null, colors: true});
 
 const tablesInQuery = ast
   .filter(({ type }) => type === 'create');
@@ -59,16 +67,20 @@ const tables = tablesInQuery.map((table) => {
 const arrWithN = (n) => new Array(n).fill(null);
 
 const tablesWithValues = tables
-  .map(({ columns, ...rest }) => ({
-    ...rest,
-    values: arrWithN(45)
-      .map(() =>
-        columns.reduce((acc, { name, type }) => ({
-          ...acc,
-          [name]: randomFunction[type](),
-        }), {})
-      )
-  }))
+  .map(({ columns, ...rest }) => {
+    i = 0;
+
+    return ({
+      ...rest,
+      values: arrWithN(45)
+        .map(() =>
+          columns.reduce((acc, { name, type }) => ({
+            ...acc,
+            [name]: randomFunction[type](),
+          }), {})
+        )
+    })
+  })
 
 // console.dir(tablesWithValues, {depth: null, colors: true});
 
@@ -102,22 +114,17 @@ const valuesWithReferences = tablesWithValues
 
 // console.dir(valuesWithReferences, {depth: null, colors: true});
 
-const insertQueries = valuesWithReferences.flatMap(({ name, values }) => values.map((value) => (
-  `INSERT INTO ${name} (${Object.keys(value).join(', ')}) VALUES (${
-    Object.values(value)
-      .map(
-        v => {
-          if (typeof v === 'string') {
-            return `'${v}'`
-          }
-
-          return v;
-        }
+const insertQueries = valuesWithReferences.flatMap(({ name, values }) => values
+  .map(value => squel
+      .insert()
+      .into(name)
+      .setFields(
+        Object.fromEntries(
+          Object.entries(value)
+            .map(([key, value]) => [key, value === undefined ? null : value])
+        )
       )
-      .join(', ')
-})`
-)))
-
-// console.dir(insertQueries, {depth: null, colors: true});
+  )
+)
 
 console.log(insertQueries.join(';\n'));

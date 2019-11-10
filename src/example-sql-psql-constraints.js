@@ -49,11 +49,11 @@ const constraints = {
   },
   Flights: {
     'originId': {
-      table: 'PilotsCrews',
+      table: 'Airports',
       key: 'airportId',
     },
     'destinationId': {
-      table: 'PilotsCrews',
+      table: 'Airports',
       key: 'airportId',
     },
     'pilotCrewId': {
